@@ -104,7 +104,7 @@ void loop() {
       encValue = 0;
     }
     
-    update_motor();
+    update_motors();
     
     //led_count();
   }
@@ -114,7 +114,7 @@ void loop() {
   lastEnc = enc;
 }
 
-void update_motor() {
+void update_motors() {
   motor0.write( encValue );
   
   int ledVal = map( encValue, 0, MAX_MOTOR_VALUE, 0, 255 );
