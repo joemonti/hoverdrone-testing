@@ -17,7 +17,7 @@
  * along with HoverDrone.  If not, see <http://www.gnu.org/licenses/>. 
  *
  * Author: Joseph Monti <joe.monti@gmail.com>
- * Copyright (c) 2013 All Rights Reserved, http://joemonti.org/
+ * Copyright (c) 2013 Joseph Monti All Rights Reserved, http://joemonti.org/
  */
 
 const int NUM_CHANNELS = 6;
@@ -32,15 +32,16 @@ const float ZERO_BUFFER = 0.005;
 const int MAX_GAP = 1920;
 const int MIN_GAP = 1110;
 
-const int STATE_PENDING = 0;
-const int STATE_INITIALIZING = 1;
-const int STATE_ZEROING = 2;
-const int STATE_READY = 3;
+const int RECEIVER_STATE_PENDING = 0;
+const int RECEIVER_STATE_INITIALIZING = 1;
+const int RECEIVER_STATE_ZEROING = 2;
+const int RECEIVER_STATE_READY = 3;
 
 volatile unsigned long last_micros;
 volatile int initializedCount;
-volatile int state;
+volatile int receiverState;
 volatile int channel;
+volatile int pulsesTmp[NUM_CHANNELS];
 volatile int pulses[NUM_CHANNELS];
 
 volatile long zeroReadyTime;
@@ -51,10 +52,10 @@ volatile int pulsesCentValue[NUM_CHANNELS];
 volatile int pulsesMin[NUM_CHANNELS];
 volatile int pulsesMax[NUM_CHANNELS];
 
-void receiver_setup( int pin ) {
+void receiver_setup( ) {
   last_micros = 0;
   initializedCount = 0;
-  state = STATE_PENDING;
+  receiverState = RECEIVER_STATE_PENDING;
   channel = 0;
   
   for ( int i = 0; i < NUM_CHANNELS; i++ ) {
@@ -62,7 +63,11 @@ void receiver_setup( int pin ) {
     pulsesMaxZero[i] = -1;
   }
   
-  attachInterrupt( pin, receiver_interrupt, RISING);
+  attachInterrupt( RECEIVER_PIN, receiver_interrupt, RISING);
+}
+
+boolean receiver_ready() {
+  return receiverState == RECEIVER_STATE_READY;
 }
 
 void receiver_interrupt( ) {
@@ -70,25 +75,29 @@ void receiver_interrupt( ) {
   unsigned long gap = current_micros - last_micros;
   
   if ( gap >= SYNC_GAP_LEN ) {
-    if ( state == STATE_READY ) {
+    if ( receiverState == RECEIVER_STATE_READY ) {
       if ( channel != NUM_CHANNELS ) {
-        state = STATE_INITIALIZING;
+        receiverState = RECEIVER_STATE_INITIALIZING;
       }
-    } else if ( state == STATE_ZEROING ) {
+      
+      for ( int i = 0; i< NUM_CHANNELS; i++ ) {
+        pulses[i] = pulsesTmp[i];
+      }
+    } else if ( receiverState == RECEIVER_STATE_ZEROING ) {
       if ( channel != NUM_CHANNELS ) {
-        state = STATE_INITIALIZING;
+        receiverState = RECEIVER_STATE_INITIALIZING;
       } else {
         for ( int i = 0; i < NUM_CHANNELS; i++ ) {
-          if ( pulsesMinZero[i] == -1 || pulses[i] < pulsesMinZero[i] ) {
-            pulsesMinZero[i] = pulses[i];
+          if ( pulsesMinZero[i] == -1 || pulsesTmp[i] < pulsesMinZero[i] ) {
+            pulsesMinZero[i] = pulsesTmp[i];
           }
-          if ( pulsesMaxZero[i] == -1 || pulses[i] > pulsesMaxZero[i] ) {
+          if ( pulsesMaxZero[i] == -1 || pulsesTmp[i] > pulsesMaxZero[i] ) {
             pulsesMaxZero[i] = pulses[i];
           }
         }
         
         if ( current_micros >= zeroReadyTime ) {
-          state = STATE_READY;
+          receiverState = RECEIVER_STATE_READY;
           
           for ( int i = 0; i < NUM_CHANNELS; i++ ) {
             int cent = ( pulsesMinZero[i] + pulsesMaxZero[i] ) / 2;
@@ -101,27 +110,27 @@ void receiver_interrupt( ) {
           }
         }
       }
-    } else if ( state == STATE_INITIALIZING ) {
+    } else if ( receiverState == RECEIVER_STATE_INITIALIZING ) {
       initializedCount++;
       if ( initializedCount >= INITIALIZE_CYCLES ) {
         if ( !zeroed ) {
           zeroReadyTime = current_micros + ZEROING_TIME;
-          state = STATE_ZEROING;
+          receiverState = RECEIVER_STATE_ZEROING;
         } else {
-          state = STATE_READY;
+          receiverState = RECEIVER_STATE_READY;
         }
       }
     } else {
-      state = STATE_INITIALIZING;
+      receiverState = RECEIVER_STATE_INITIALIZING;
       initializedCount = 0;
     }
     channel = 0;
   } else if ( channel < NUM_CHANNELS ) {
     if ( gap >= MIN_IN_PULSE_WIDTH && gap <= MAX_IN_PULSE_WIDTH ) {
-      pulses[channel] = gap;
+      pulsesTmp[channel] = gap;
       channel++;
-    } else if ( state == STATE_READY || state == STATE_ZEROING ) {
-      state = STATE_INITIALIZING;
+    } else if ( receiverState == RECEIVER_STATE_READY || receiverState == RECEIVER_STATE_ZEROING ) {
+      receiverState = RECEIVER_STATE_INITIALIZING;
       channel = 0;
     }
   }
@@ -129,12 +138,12 @@ void receiver_interrupt( ) {
   last_micros = current_micros;
 }
 
-int getState() { 
-  return state;
+int receiver_get_state() { 
+  return receiverState;
 }
 
-int getValue( int c ) {
-  if ( state == STATE_READY ) {
+int receiver_get_value( int c ) {
+  if ( receiverState == RECEIVER_STATE_READY ) {
     int pulse = pulses[c];
     if ( pulse >= pulsesMinZero[c] && pulse <= pulsesMaxZero[c] ) {
       return 0;
@@ -147,8 +156,8 @@ int getValue( int c ) {
   }
 }
 
-int getPulse( int c ) {
-  if ( state == STATE_READY ) {
+int receiver_get_pulse( int c ) {
+  if ( receiverState == RECEIVER_STATE_READY ) {
     return pulses[c];
   } else {
     return -1;

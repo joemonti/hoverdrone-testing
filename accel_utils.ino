@@ -17,38 +17,94 @@
  * along with HoverDrone.  If not, see <http://www.gnu.org/licenses/>. 
  *
  * Author: Joseph Monti <joe.monti@gmail.com>
- * Copyright (c) 2013 All Rights Reserved, http://joemonti.org/
+ * Copyright (c) 2013 Joseph Monti All Rights Reserved, http://joemonti.org/
  */
 
 const int ANALOG_RESOLUTION = 12;
 
-const int ACCEL_PIN_X = 0;
-const int ACCEL_PIN_Y = 1;
-const int ACCEL_PIN_Z = 2;
+const int ACCEL_ZERO_ITERS = 500;
+const int ACCEL_ZERO_DELAY = 10; // approx 5 seconds
 
-const int ACCEL_DELAY = 200;
+const float ACCEL_FILTER_ALPHA = 0.5;
 
-int nextAccelMillis = 0;
+int accelZeroCount;
+float accelZeroXValues[ACCEL_ZERO_ITERS];
+float accelZeroYValues[ACCEL_ZERO_ITERS];
+float accelZeroZValues[ACCEL_ZERO_ITERS];
+boolean accelZerod;
 
-int accelVal = 0;
+float accelZeroX;
+float accelZeroY;
+float accelZeroZ;
 
-void accel_init() {
+float accelX;
+float accelY;
+float accelZ;
+
+long accelNextUpdate;
+
+void accel_setup() {
   analogReadResolution( ANALOG_RESOLUTION );
   
-  nextAccelMillis = millis();
+  accelZeroCount = 0;
+  accelZerod = false;
+  
+  accelNextUpdate = millis();
 }
 
-void accel_update() {
-  if ( millis() >= nextAccelMillis ) {
-    accelVal = analogRead( ACCEL_PIN_X );
-    Serial.print( accelVal );
-    Serial.print( "," );
-    accelVal = analogRead( ACCEL_PIN_Y );
-    Serial.print( accelVal );
-    Serial.print( "," );
-    accelVal = analogRead( ACCEL_PIN_Z );
-    Serial.println( accelVal );
+void accel_loop() {
+  float gx = analogRead( ACCEL_PIN_X );
+  float gy = analogRead( ACCEL_PIN_Y );
+  float gz = analogRead( ACCEL_PIN_Z );
+
+  if ( !accelZerod ) {
+    if ( millis() >= accelNextUpdate ) {
+      accelZeroXValues[accelZeroCount] = gx;
+      accelZeroYValues[accelZeroCount] = gy;
+      accelZeroZValues[accelZeroCount] = gz;
+      accelZeroCount += 1;
+      
+      accelX = gx;
+      accelY = gy;
+      accelZ = gz;
+      
+      if ( accelZeroCount >= ACCEL_ZERO_ITERS ) {
+        float zeroXTotal = 0.0;
+        float zeroYTotal = 0.0;
+        float zeroZTotal = 0.0;
         
-    nextAccelMillis = millis() + ACCEL_DELAY;
+        for ( int i = 0; i < ACCEL_ZERO_ITERS; i++ ) {
+          zeroXTotal += accelZeroXValues[i];
+          zeroYTotal += accelZeroYValues[i];
+          zeroZTotal += accelZeroZValues[i];
+        }
+        
+        accelZeroX = zeroXTotal / accelZeroCount;
+        accelZeroY = zeroYTotal / accelZeroCount;
+        accelZeroZ = zeroZTotal / accelZeroCount;
+        accelZerod = true;
+        
+        //Serial.print("Z");
+        //printXYZ( gx, gy, gz, zeroX, zeroY, zeroZ );
+        
+        accelX = accelZeroX;
+        accelY = accelZeroX;
+        accelZ = accelZeroZ;
+      }
+      
+      accelNextUpdate = millis() + ACCEL_ZERO_DELAY;
+    }
+  } else {
+    gx -= accelZeroX;
+    gy -= accelZeroY;
+    gz -= accelZeroZ;
+    
+    accelX = gx + ACCEL_FILTER_ALPHA * ( accelX - gx );
+    accelY = gy + ACCEL_FILTER_ALPHA * ( accelY - gy );
+    accelZ = gz + ACCEL_FILTER_ALPHA * ( accelZ - gz );
   }
+}
+
+boolean accel_ready( ) {
+  return accelZerod;
 }

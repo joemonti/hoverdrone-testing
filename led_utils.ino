@@ -17,64 +17,43 @@
  * along with HoverDrone.  If not, see <http://www.gnu.org/licenses/>. 
  *
  * Author: Joseph Monti <joe.monti@gmail.com>
- * Copyright (c) 2013 All Rights Reserved, http://joemonti.org/
+ * Copyright (c) 2013 Joseph Monti All Rights Reserved, http://joemonti.org/
  */
 
 const int LED_MIN_DELAY = 50;
 const int LED_MAX_DELAY = 500;
-boolean lastLed = LOW;
-int nextLedMillis = 0;
 
+const int NUM_LEDS = 4;
 
-void led_init_blink() {
-  lastLed = LOW;
-  nextLedMillis = millis();
+int ledPin[NUM_LEDS];
+boolean lastLed[NUM_LEDS];
+int nextLedMillis[NUM_LEDS];
+
+void led_setup() {
+  for ( int i = 0; i < NUM_LEDS; i++ ) {
+    lastLed[i] = LOW;
+    nextLedMillis[i] = millis();
+  }
+  
+  ledPin[0] = MOTOR_LED_PIN0;
+  ledPin[1] = MOTOR_LED_PIN1;
+  ledPin[2] = MOTOR_LED_PIN2;
+  ledPin[3] = MOTOR_LED_PIN3;
 }
 
-void led_blink() {
-  if ( millis() >= nextLedMillis ) {
-    lastLed = !lastLed;
-    digitalWrite( LED_PIN0, lastLed );
-    
-    if ( encValue == 0 ) {
-      digitalWrite( LED_PIN1, HIGH );
-    } else {
-      digitalWrite( LED_PIN1, LOW );
-    }
-    
-    if ( encValue == MAX_MOTOR_VALUE ) {
-      digitalWrite( LED_PIN2, HIGH );
-    } else {
-      digitalWrite( LED_PIN2, LOW );
-    }
-    
-    nextLedMillis = millis() + ( map( MAX_MOTOR_VALUE-encValue, 0, MAX_MOTOR_VALUE, LED_MIN_DELAY, LED_MAX_DELAY ) ) ;
-  }
+void led_blink( int value1, int value2, int value3, int value4 ) {
+  led_blink_led( 0, value1 );
+  led_blink_led( 1, value2 );
+  led_blink_led( 2, value3 );
+  led_blink_led( 3, value4 );
 }
 
-void led_count() {
-  if ( encValue & 1 ) {
-    digitalWrite( LED_PIN0, HIGH );
-  } else {
-    digitalWrite( LED_PIN0, LOW );
-  }
+void led_blink_led( int index, int value ) {
+  if ( millis() >= nextLedMillis[index] ) {
+    lastLed[index] = !lastLed[index];
+    digitalWrite( ledPin[index], lastLed[index] );
     
-  if ( encValue & 2 ) {
-    digitalWrite( LED_PIN1, HIGH );
-  } else {
-    digitalWrite( LED_PIN1, LOW );
+    nextLedMillis[index] = millis() + ( map( MAX_MOTOR_VALUE-value, 0, MAX_MOTOR_VALUE, LED_MIN_DELAY, LED_MAX_DELAY ) ) ;
   }
-    
-  if ( encValue & 4 ) {
-    digitalWrite( LED_PIN2, HIGH );
-  } else {
-    digitalWrite( LED_PIN2, LOW );
-  }
-    
-  if ( encValue & 8 ) {
-    digitalWrite( LED_PIN3, HIGH );
-  } else {
-     digitalWrite( LED_PIN3, LOW );
-  }
-}  
+}
 
